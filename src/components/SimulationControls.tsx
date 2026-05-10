@@ -1,16 +1,13 @@
 'use client';
 
-import { useSimulationStore } from '@/store/simulationStore';
+import { useSimulation } from '@/contexts/SimulationContext';
 
 export default function SimulationControls() {
   const {
     isRunning,
-    simulationSpeed,
     startSimulation,
-    stopSimulation,
-    stepSimulation,
-    setSimulationSpeed
-  } = useSimulationStore();
+    pauseSimulation: stopSimulation,
+  } = useSimulation();
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-md mb-8">
@@ -32,27 +29,6 @@ export default function SimulationControls() {
             停止
           </button>
         )}
-        
-        <button
-          onClick={stepSimulation}
-          className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
-          disabled={isRunning}
-        >
-          1ステップ進める
-        </button>
-      </div>
-
-      <div className="flex items-center gap-4">
-        <label className="text-sm font-medium">シミュレーション速度:</label>
-        <input
-          type="range"
-          min="1"
-          max="10"
-          value={simulationSpeed}
-          onChange={(e) => setSimulationSpeed(Number(e.target.value))}
-          className="w-48"
-        />
-        <span className="text-sm">{simulationSpeed}x</span>
       </div>
     </div>
   );

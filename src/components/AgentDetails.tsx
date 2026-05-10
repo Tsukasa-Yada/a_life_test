@@ -90,7 +90,8 @@ export default function AgentDetails() {
               <div>
                 <dt className="text-gray-600 dark:text-gray-400">教育</dt>
                 <dd className="font-medium text-gray-900 dark:text-white">
-                  {selectedAgent.education === 'highSchoolStudent' ? '高校在学'
+                  {selectedAgent.education === 'middleSchool' ? '中卒'
+                    : selectedAgent.education === 'highSchoolStudent' ? '高校在学'
                     : selectedAgent.education === 'highSchool' ? '高校卒'
                     : selectedAgent.education === 'bachelorStudent' ? '大学在学'
                     : selectedAgent.education === 'bachelor' ? '大学卒'
@@ -99,6 +100,14 @@ export default function AgentDetails() {
                     : selectedAgent.education === 'doctorStudent' ? '博士課程在学'
                     : '博士'}
                 </dd>
+              </div>
+              <div>
+                <dt className="text-gray-600 dark:text-gray-400">居住地域</dt>
+                <dd className="font-medium text-gray-900 dark:text-white">{selectedAgent.prefecture.name}</dd>
+              </div>
+              <div>
+                <dt className="text-gray-600 dark:text-gray-400">地域ブロック</dt>
+                <dd className="font-medium text-gray-900 dark:text-white">{selectedAgent.prefecture.region}</dd>
               </div>
             </dl>
           </div>

@@ -501,4 +501,35 @@ function getStatsListUrl(params: Record<string, string | number>) {
 function getStatsDataUrl(params: Record<string, string>) {
   const baseUrl = 'https://api.e-stat.go.jp/rest/3.0/app/json/getStatsData';
   return `${baseUrl}?${new URLSearchParams(params)}`;
-} 
+}
+
+/**
+ * e-Stat APIから都道府県ごとの人口データを取得
+ * @returns Promise<{ code: string; name: string; population: number; }[]>
+ */
+export const fetchPrefecturePopulations = async (): Promise<{ code: string; name: string; population: number; }[]> => {
+  // 人口推計 統計表IDを利用
+  const statsDataId = STATS_DATA_IDS.POPULATION_ESTIMATE;
+  const data = await fetchEstatData(statsDataId);
+  // データ整形
+  const values = data.GET_STATS_DATA.STATISTICAL_DATA?.DATA_INF?.VALUE || [];
+  const areaMap: Record<string, string> = {};
+  // 地域名マッピング
+  const classObjs = data.GET_STATS_DATA.STATISTICAL_DATA?.CLASS_INF?.CLASS_OBJ || [];
+  for (const obj of classObjs) {
+    if (obj['@name'] === '地域' && Array.isArray((obj as any).CLASS)) {
+      for (const c of (obj as any).CLASS) {
+        areaMap[c['@code']] = c['@name'];
+      }
+    }
+  }
+  // 最新年のデータのみ抽出
+  const latestTime = values.reduce((max, v) => v['@time'] > max ? v['@time'] : max, '');
+  const filtered = values.filter((v: any) => v['@time'] === latestTime && v['@area'] !== '00000');
+  // 人口データ配列生成
+  return filtered.map((v: any) => ({
+    code: v['@area'].slice(0, 2),
+    name: areaMap[v['@area']] || v['@area'],
+    population: Number(v['$']) * 1000 // 千人単位→人単位
+  }));
+}; 

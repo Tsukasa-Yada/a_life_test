@@ -1,5 +1,6 @@
 import type { Agent } from '../types/agent';
 import { fetchLatestSavingsData, fetchSavingsData } from './estatApi';
+import { Prefecture, selectPrefectureByPopulationRatio } from './prefectureData';
 
 let nextId = 1;
 
@@ -89,8 +90,13 @@ function generateRandomBoolean(probability = 0.5): boolean {
 
 // 年齢に応じた教育レベルを決定
 function generateEducation(age: number): Agent['education'] {
-  // 18歳未満は高校生として扱う
-  if (age < 18) return 'highSchoolStudent';
+  // 15-17歳は中卒か高校生として扱う
+  if (age < 18) {
+    // 15歳は中卒
+    if (age === 15) return 'middleSchool';
+    // 16-17歳は中卒か高校生
+    return Math.random() < 0.95 ? 'highSchoolStudent' : 'middleSchool';
+  }
   
   // 18-21歳は高校卒就職か大学在学
   if (age <= 21) {
@@ -110,96 +116,94 @@ function generateEducation(age: number): Agent['education'] {
   // 25-27歳の教育分布
   if (age <= 27) {
     const rand = Math.random();
-    if (rand < 0.42) return 'highSchool';    // 高校卒 42%
-    if (rand < 0.93) return 'bachelor';      // 大学卒 51%
-    if (rand < 0.98) return 'master';        // 修士 5%
-    return 'doctorStudent';                  // 博士課程在学 2%
+    if (rand < 0.05) return 'middleSchool';     // 中卒 5%
+    if (rand < 0.42) return 'highSchool';       // 高校卒 37%
+    if (rand < 0.93) return 'bachelor';         // 大学卒 51%
+    if (rand < 0.98) return 'master';           // 修士 5%
+    return 'doctorStudent';                     // 博士課程在学 2%
   }
   
   // 28歳以上の教育分布（2020年国勢調査データ参考）
   const rand = Math.random();
-  if (rand < 0.42) return 'highSchool';    // 高校卒 42%
-  if (rand < 0.93) return 'bachelor';      // 大学卒 51%
-  if (rand < 0.98) return 'master';        // 修士 5%
-  return 'doctor';                         // 博士 2%
+  if (rand < 0.05) return 'middleSchool';      // 中卒 5%
+  if (rand < 0.42) return 'highSchool';        // 高校卒 37%
+  if (rand < 0.93) return 'bachelor';          // 大学卒 51%
+  if (rand < 0.98) return 'master';            // 修士 5%
+  return 'doctor';                             // 博士 2%
 }
 
-// 年齢と教育レベルに応じた収入を計算
-function calculateIncome(age: number, education: Agent['education'], employed: boolean): number {
-  // 在学中の学生の場合（アルバイト収入を想定）
-  if (education.endsWith('Student')) {
-    // 学生の収入分布を現実的に設定
-    // 1. 大多数（80%）は50-90万円の範囲
-    // 2. 少数（15%）は90-102万円の範囲
-    // 3. 極めて少数（5%）は102-103万円の範囲
-    const rand = Math.random();
-    const agentKey = `income_${nextId}`;  // エージェントごとにユニークなキーを生成
-    
-    if (rand < 0.80) {
-      // 50-90万円の範囲（大多数）
-      return Math.round(generateRandomValue(500000, 900000, agentKey));
-    } else if (rand < 0.95) {
-      // 90-102万円の範囲（少数）
-      return Math.round(generateRandomValue(900000, 1020000, agentKey));
-    } else {
-      // 102-103万円の範囲（極めて少数）
-      return Math.round(generateRandomValue(1020000, 1030000, agentKey));
-    }
+// 年齢と教育レベルに応じた収入を計算（都道府県係数を適用）
+function calculateIncome(age: number, education: Agent['education'], employed: boolean, prefecture: Prefecture, incomeBrackets: { min: number, max: number, prob: number }[]): number {
+  // 15-17歳の場合（アルバイト収入を想定）
+  if (age < 18) {
+    return Math.floor(generateRandomValue(300000, 1000000));
   }
-  
-  // 定年後（65歳以上）は年金を考慮
-  if (age >= 65) {
-    // 基礎年金（月額65,000円）+ 厚生年金（月額約10万円）を基準
-    const baseIncome = 1980000; // 年額
-    // 教育レベルによる年金額の違い（厚生年金の報酬比例部分の違いを反映）
-    const educationBonus = education === 'highSchool' ? 0 
-      : education === 'bachelor' ? 300000    // 年額30万円増
-      : education === 'master' ? 500000      // 年額50万円増
-      : 700000;                              // 年額70万円増
-    
-    // 就業している場合は給与所得も加算
-    if (employed) {
-      // 給与所得（再雇用を想定した収入）
-      const salaryIncome = Math.round(generateRandomValue(1200000, 2400000));
-      return baseIncome + educationBonus + salaryIncome;
-    }
-    
-    // 就業していない場合は年金収入のみ
-    return baseIncome + educationBonus;
+
+  // 学生の場合（アルバイト収入を想定）
+  if (education === 'highSchoolStudent' || education === 'bachelorStudent') {
+    return Math.floor(generateRandomValue(300000, 1200000));
   }
-  
-  // 65歳未満で未就業の場合
+
+  // 未就業の場合
   if (!employed) return 0;
-
-  // 年齢とキャリアステージに応じた基本給（令和4年賃金構造基本統計調査を参考）
-  let baseIncome = 0;
-  if (age < 25) {
-    baseIncome = 2800000;  // 新卒初任給水準
-  } else if (age < 30) {
-    baseIncome = 3200000;
-  } else if (age < 35) {
-    baseIncome = 3800000;
+  
+  // 教育レベルと年齢による係数を定義
+  // この係数は各所得帯の中でどの位置に位置するかに影響
+  const educationFactor = {
+    'middleSchool': 0.2,       // 下位20%
+    'highSchool': 0.4,         // 下位40%
+    'bachelor': 0.6,           // 上位40%
+    'master': 0.8,             // 上位20%
+    'doctor': 0.9              // 上位10%
+  };
+  
+  // 年齢による補正係数（20代を1.0とする）
+  let ageFactor = 1.0;
+  if (age < 30) {
+    ageFactor = 0.8 + (age - 20) * 0.02; // 20代: 0.8-0.98
   } else if (age < 40) {
-    baseIncome = 4200000;
-  } else if (age < 45) {
-    baseIncome = 4600000;
+    ageFactor = 1.0 + (age - 30) * 0.02; // 30代: 1.0-1.18 (係数を下げる)
   } else if (age < 50) {
-    baseIncome = 5000000;
-  } else if (age < 55) {
-    baseIncome = 5400000;
+    ageFactor = 1.2 + (age - 40) * 0.015; // 40代: 1.2-1.335 (係数を下げる)
   } else if (age < 60) {
-    baseIncome = 5800000;
+    ageFactor = 1.35 + (age - 50) * 0.008; // 50代: 1.35-1.422 (係数を下げる)
   } else {
-    baseIncome = 5000000;
+    ageFactor = 1.35; // 60-64歳 (係数を下げる)
   }
-
-  // 教育レベルによる収入の違い（令和4年賃金構造基本統計調査を参考）
-  const educationMultiplier = education === 'highSchool' ? 1
-    : education === 'bachelor' ? 1.3     // 大卒は高卒の1.3倍
-    : education === 'master' ? 1.5       // 修士は高卒の1.5倍
-    : 1.7;                               // 博士は高卒の1.7倍
-
-  return Math.round(baseIncome * educationMultiplier);
+  
+  // 乱数で所得帯を選択（累積確率方式）
+  const rand = Math.random();
+  let cumulativeProb = 0;
+  let selectedBracket = incomeBrackets[incomeBrackets.length - 1]; // デフォルトは最後の区分
+  
+  for (const bracket of incomeBrackets) {
+    cumulativeProb += bracket.prob;
+    if (rand <= cumulativeProb) {
+      selectedBracket = bracket;
+      break;
+    }
+  }
+  
+  // 教育レベルに応じた所得帯内での位置調整
+  const eduFactor = educationFactor[education as keyof typeof educationFactor] || 0.5;
+  
+  // 所得帯内での位置を決定
+  // 教育レベルと個人差を加味した調整係数
+  // 変動係数を小さくして分布が極端にならないようにする
+  const variationFactor = generateRandomValue(0.85, 1.15); // 0.85-1.15の変動係数に調整
+  const positionFactor = eduFactor * variationFactor;
+  
+  // 帯内での値を計算（min〜maxの間）
+  const baseIncome = Math.floor(selectedBracket.min + (selectedBracket.max - selectedBracket.min) * positionFactor);
+  
+  // 年齢による調整を適用
+  // 年齢による調整係数をさらに抑える
+  const ageAdjustedIncome = baseIncome * (1 + (ageFactor - 1) * 0.6);
+  
+  // 地域係数を適用して最終的な収入を決定
+  // 最終的なが3000万円を超える場合は上限を設ける
+  const finalIncome = Math.round(ageAdjustedIncome * prefecture.incomeRatio);
+  return Math.min(finalIncome, 30000000);
 }
 
 // 年齢に応じた傾斜係数を計算する関数
@@ -210,8 +214,8 @@ function calculateAgeGradient(age: number, minAge: number, maxAge: number): numb
   return Math.pow(position, 2);
 }
 
-// 年齢に応じた貯蓄額を計算
-export function calculateSavings(age: number, education: Agent['education'], income: number): number {
+// 年齢に応じた貯蓄額を計算（都道府県係数を適用）
+export function calculateSavings(age: number, education: Agent['education'], income: number, prefecture: Prefecture): number {
   let ageGroup: MappedAgeGroup;
   let baseSavings: number;
   let ageGradient = 1.0;
@@ -296,8 +300,11 @@ export function calculateSavings(age: number, education: Agent['education'], inc
     `random_${age}`
   );
 
+  // 5. 都道府県の地域格差を反映
+  const prefectureAdjustment = prefecture.savingsRatio;
+
   // 最終的な貯蓄額を計算
-  const adjustedSavings = baseSavings * ageAdjustment * educationMultiplier * incomeAdjustment * randomFactor;
+  const adjustedSavings = baseSavings * ageAdjustment * educationMultiplier * incomeAdjustment * randomFactor * prefectureAdjustment;
 
   // 最小値と最大値の設定（年齢に応じて調整）
   const minSavings = age < 20 ? 50000 : baseSavings * Math.max(0.1, 0.3 - (age / 200)); // 年齢とともに下限が上昇
@@ -326,20 +333,45 @@ export async function generateAgent(): Promise<Agent> {
     await initializeSavingsData();
   }
 
-  // 年齢を生成（18-80歳）
-  const age = Math.floor(generateRandomValue(18, 80));
+  // 年齢を生成（15-80歳）
+  const age = Math.floor(generateRandomValue(15, 80));
   
-  // 雇用状態を決定（65歳以上は基本的に退職）
+  // 雇用状態を決定（65歳以上は基本的に退職、失業率は2.6%）
   const employed = age < 65 ? generateRandomBoolean(0.974) : generateRandomBoolean(0.1);
   
   // 教育レベルを決定
   const education = generateEducation(age);
   
-  // 収入を計算
-  const income = calculateIncome(age, education, employed);
+  // 居住地域（都道府県）を決定
+  const prefecture = selectPrefectureByPopulationRatio();
   
-  // 貯蓄を計算（e-statデータを使用）
-  const savings = calculateSavings(age, education, income);
+  // 収入を計算（都道府県格差を反映）
+  const income = calculateIncome(age, education, employed, prefecture, [
+    { min: 0, max: 1000000, prob: 0.069 },
+    { min: 1000000, max: 2000000, prob: 0.146 },
+    { min: 2000000, max: 3000000, prob: 0.145 },
+    { min: 3000000, max: 4000000, prob: 0.129 },
+    { min: 4000000, max: 5000000, prob: 0.107 },
+    { min: 5000000, max: 6000000, prob: 0.085 },
+    { min: 6000000, max: 7000000, prob: 0.064 },
+    { min: 7000000, max: 8000000, prob: 0.058 },
+    { min: 8000000, max: 9000000, prob: 0.046 },
+    { min: 9000000, max: 10000000, prob: 0.037 },
+    { min: 10000000, max: 11000000, prob: 0.026 },
+    { min: 11000000, max: 12000000, prob: 0.023 },
+    { min: 12000000, max: 13000000, prob: 0.018 },
+    { min: 13000000, max: 14000000, prob: 0.010 },
+    { min: 14000000, max: 15000000, prob: 0.008 },
+    { min: 15000000, max: 16000000, prob: 0.007 },
+    { min: 16000000, max: 17000000, prob: 0.003 },
+    { min: 17000000, max: 18000000, prob: 0.003 },
+    { min: 18000000, max: 19000000, prob: 0.003 },
+    { min: 19000000, max: 20000000, prob: 0.002 },
+    { min: 20000000, max: 30000000, prob: 0.013 }
+  ]);
+  
+  // 貯蓄を計算（e-statデータと都道府県格差を使用）
+  const savings = calculateSavings(age, education, income, prefecture);
 
   const agent: Agent = {
     id: nextId++,
@@ -348,6 +380,13 @@ export async function generateAgent(): Promise<Agent> {
     age,
     gender: generateRandomBoolean(0.486) ? 'male' : 'female',
     education,
+    
+    // 居住地域
+    prefecture: {
+      code: prefecture.code,
+      name: prefecture.name,
+      region: prefecture.region
+    },
     
     // 経済状態
     income,
@@ -362,11 +401,79 @@ export async function generateAgent(): Promise<Agent> {
   return agent;
 }
 
-export async function generatePopulation(size: number): Promise<Agent[]> {
-  const population: Agent[] = [];
-  for (let i = 0; i < size; i++) {
-    const agent = await generateAgent();
-    population.push(agent);
+export async function generatePopulation(size: number, incomeBrackets: { min: number, max: number, prob: number }[]): Promise<Agent[]> {
+  // 各区分に割り当てる人数を計算
+  const countsByBracket = incomeBrackets.map(bracket => {
+    return Math.round(size * bracket.prob);
+  });
+  
+  // 合計が目標サイズになるよう調整
+  let totalCount = countsByBracket.reduce((sum, count) => sum + count, 0);
+  if (totalCount !== size) {
+    // 誤差を最大の区分に割り当て
+    const maxIdx = countsByBracket.indexOf(Math.max(...countsByBracket));
+    countsByBracket[maxIdx] += (size - totalCount);
   }
-  return population;
+
+  const agents: Agent[] = [];
+  let idCounter = 1;
+
+  // 各所得区分ごとにエージェントを生成
+  for (let i = 0; i < incomeBrackets.length; i++) {
+    const count = countsByBracket[i];
+    for (let j = 0; j < count; j++) {
+      // 年齢の生成（15-64歳、労働力人口）
+      const age = Math.floor(generateRandomValue(15, 80));
+      
+      // 教育レベルの生成
+      const education = generateEducation(age);
+      
+      // 学生かどうかを判定
+      const isStudent = education === 'highSchoolStudent' || education === 'bachelorStudent';
+      
+      // 就業状態の生成（失業率は2.6%）
+      const employed = Math.random() > 0.026;
+      
+      // 都道府県の選択
+      const prefecture = selectPrefectureByPopulationRatio();
+      
+      // 収入は区分内でランダム
+      let income = 0;
+      if (education === 'bachelorStudent' || education === 'highSchoolStudent') {
+        if (Math.random() < 0.05) {
+          // 5%は103万円以上（ただし区分のminが103万円未満なら103万円から）
+          const minIncome = Math.max(incomeBrackets[i].min, 1030000);
+          income = Math.floor(generateRandomValue(minIncome, incomeBrackets[i].max));
+        } else {
+          // 95%は103万円未満
+          income = Math.floor(generateRandomValue(incomeBrackets[i].min, Math.min(incomeBrackets[i].max, 1029999)));
+        }
+      } else {
+        income = Math.floor(generateRandomValue(incomeBrackets[i].min, incomeBrackets[i].max));
+      }
+      
+      // 各種初期貯金額
+      // 年齢・所得・地域に応じた初期貯金額を設定
+      const initialSavings = calculateSavings(age, education, income, prefecture);
+      
+      agents.push({
+        id: idCounter++,
+        age,
+        gender: 'male',  // 性別をデフォルト設定
+        education,
+        employed,
+        income, 
+        savings: initialSavings,
+        prefecture: {
+          code: prefecture.code,
+          name: prefecture.name,
+          region: prefecture.region
+        },
+        skillLevel: 0.5,  // スキルレベルのデフォルト値
+        productivity: 1.0  // 生産性のデフォルト値
+      });
+    }
+  }
+
+  return agents;
 } 

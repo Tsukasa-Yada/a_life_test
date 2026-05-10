@@ -6,7 +6,7 @@ import { calculateIncomeTax } from '@/utils/taxCalculator';
 import { Agent } from '@/types/agent';
 
 // ソートキーの型定義を更新
-type SortKey = 'id' | 'age' | 'income' | 'monthlyIncome' | 'tax' | 'employed' | 'education' | 'gender';
+type SortKey = 'id' | 'age' | 'income' | 'monthlyIncome' | 'tax' | 'employed' | 'education' | 'gender' | 'prefecture' | 'region';
 type SortOrder = 'asc' | 'desc';
 
 export default function AgentList() {
@@ -51,7 +51,8 @@ export default function AgentList() {
 
   // 教育レベルを日本語に変換する関数
   const formatEducation = (education: Agent['education']): string => {
-    return education === 'highSchoolStudent' ? '高校在学'
+    return education === 'middleSchool' ? '中卒'
+      : education === 'highSchoolStudent' ? '高校在学'
       : education === 'highSchool' ? '高校卒'
       : education === 'bachelorStudent' ? '大学在学'
       : education === 'bachelor' ? '大学卒'
@@ -99,9 +100,16 @@ export default function AgentList() {
       case 'gender':
         comparison = a.gender.localeCompare(b.gender);
         break;
+      case 'prefecture':
+        comparison = a.prefecture.name.localeCompare(b.prefecture.name);
+        break;
+      case 'region':
+        comparison = a.prefecture.region.localeCompare(b.prefecture.region);
+        break;
       case 'education':
         // 教育レベルの順序を定義
         const eduOrder = {
+          'middleSchool': 0,
           'highSchoolStudent': 1,
           'highSchool': 2,
           'bachelorStudent': 3,
@@ -163,6 +171,12 @@ export default function AgentList() {
               </th>
               <th 
                 className="px-4 py-2 text-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 border-x border-b dark:border-gray-600 text-gray-900 dark:text-white"
+                onClick={() => toggleSort('prefecture')}
+              >
+                都道府県 {renderSortIcon('prefecture')}
+              </th>
+              <th 
+                className="px-4 py-2 text-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 border-x border-b dark:border-gray-600 text-gray-900 dark:text-white"
                 onClick={() => toggleSort('employed')}
               >
                 雇用状況 {renderSortIcon('employed')}
@@ -172,12 +186,6 @@ export default function AgentList() {
                 onClick={() => toggleSort('education')}
               >
                 教育 {renderSortIcon('education')}
-              </th>
-              <th 
-                className="px-4 py-2 text-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 border-x border-b dark:border-gray-600 text-gray-900 dark:text-white"
-                onClick={() => toggleSort('monthlyIncome')}
-              >
-                月収 {renderSortIcon('monthlyIncome')}
               </th>
               <th 
                 className="px-4 py-2 text-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 border-x border-b dark:border-gray-600 text-gray-900 dark:text-white"
@@ -196,7 +204,6 @@ export default function AgentList() {
           <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
             {sortedAgents.map((agent, index) => {
               const tax = calculateIncomeTax(agent.income);
-              const monthlyIncome = calculateMonthlyIncome(agent.income);
               return (
                 <tr
                   key={agent.id}
@@ -208,9 +215,9 @@ export default function AgentList() {
                   <td className="px-4 py-2 text-center border-x dark:border-gray-700">{agent.id}</td>
                   <td className="px-4 py-2 text-center border-x dark:border-gray-700">{Math.floor(agent.age)}歳</td>
                   <td className="px-4 py-2 text-center border-x dark:border-gray-700">{formatGender(agent.gender)}</td>
+                  <td className="px-4 py-2 text-center border-x dark:border-gray-700">{agent.prefecture.name}</td>
                   <td className="px-4 py-2 text-center border-x dark:border-gray-700">{agent.employed ? '就業中' : '未就業'}</td>
                   <td className="px-4 py-2 text-center border-x dark:border-gray-700">{formatEducation(agent.education)}</td>
-                  <td className="px-4 py-2 text-center border-x dark:border-gray-700">{formatCurrency(monthlyIncome)}</td>
                   <td className="px-4 py-2 text-center border-x dark:border-gray-700">{formatCurrency(agent.income)}</td>
                   <td className="px-4 py-2 text-center border-x dark:border-gray-700">{formatCurrency(tax)}</td>
                 </tr>
